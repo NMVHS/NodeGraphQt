@@ -42,12 +42,15 @@ class PropertiesList(QtWidgets.QTableWidget):
         self.setItemDelegate(PropertiesDelegate())
         self.setColumnCount(1)
         self.setShowGrid(False)
-        QtCompat.QHeaderView.setSectionResizeMode(
-            self.verticalHeader(), QtWidgets.QHeaderView.ResizeToContents)
         self.verticalHeader().hide()
-        QtCompat.QHeaderView.setSectionResizeMode(
-            self.horizontalHeader(), 0, QtWidgets.QHeaderView.Stretch)
         self.horizontalHeader().hide()
+        self.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.verticalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+
+    def wheelEvent(self, event):
+        delta = event.delta() * 0.2
+        self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta)
 
 
 class PropertiesBinWidget(QtWidgets.QWidget):
@@ -250,13 +253,13 @@ class PropertiesBinWidget(QtWidgets.QWidget):
 
 if __name__ == '__main__':
     import sys
-    from Framework.vendor.NodeGraphQt import BaseNode, NodeGraph
-    from Framework.vendor.NodeGraphQt.constants import (NODE_PROP_QLABEL,
-                                                        NODE_PROP_QLINEEDIT,
-                                                        NODE_PROP_QCOMBO,
-                                                        NODE_PROP_QSPINBOX,
-                                                        NODE_PROP_COLORPICKER,
-                                                        NODE_PROP_SLIDER)
+    from .. import BaseNode, NodeGraph
+    from ..constants import (NODE_PROP_QLABEL,
+                            NODE_PROP_QLINEEDIT,
+                            NODE_PROP_QCOMBO,
+                            NODE_PROP_QSPINBOX,
+                            NODE_PROP_COLORPICKER,
+                            NODE_PROP_SLIDER)
 
 
     class TestNode(BaseNode):

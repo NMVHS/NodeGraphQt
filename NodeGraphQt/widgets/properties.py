@@ -324,7 +324,9 @@ class PropFilePath(BaseProperty):
         if file:
             self.set_value(file)
 
-    def _on_value_change(self, value):
+    def _on_value_change(self, value=None):
+        if value is None:
+            value = self._ledit.text()
         self.value_changed.emit(self.toolTip(), value)
 
     def get_value(self):
@@ -708,6 +710,12 @@ WIDGET_MAP = {
 }
 
 
+def registerPropType(name, prop_class, override=False):
+    global WIDGET_MAP
+    if name in WIDGET_MAP.keys() and not override:
+        raise Exception("Prop type {} has already exists, u can use override=True to override)".format(name))
+    WIDGET_MAP[name] = prop_class
+
 # main property widgets.
 
 
@@ -970,7 +978,7 @@ class NodePropWidget(QtWidgets.QWidget):
 
 if __name__ == '__main__':
     import sys
-    from Framework.vendor.NodeGraphQt import BaseNode, NodeGraph
+    from .. import BaseNode, NodeGraph
 
 
     class TestNode(BaseNode):
