@@ -11,6 +11,7 @@ from ..constants import (NODE_PROP_QLABEL,
                          NODE_PROP_COLORPICKER,
                          NODE_PROP_SLIDER,
                          NODE_PROP_FILE,
+                         NODE_PROP_FILE_SAVE,
                          NODE_PROP_VECTOR2,
                          NODE_PROP_VECTOR3,
                          NODE_PROP_VECTOR4,
@@ -30,77 +31,52 @@ class BaseProperty(QtWidgets.QWidget):
         raise NotImplementedError
 
 
-class _ColorSolid(QtWidgets.QWidget):
-
-    def __init__(self, parent=None, color=None):
-        super(_ColorSolid, self).__init__(parent)
-        self.setFixedSize(15, 15)
-        self.color = color or (0, 0, 0)
-
-    def paintEvent(self, event):
-        size = self.geometry()
-        rect = QtCore.QRect(1, 1, size.width() - 2, size.height() - 2)
-        painter = QtGui.QPainter(self)
-        painter.setPen(QtCore.Qt.NoPen)
-        painter.setBrush(QtGui.QColor(*self._color))
-        painter.drawRoundedRect(rect, 1, 1)
-
-    @property
-    def color(self):
-        return self._color
-
-    @color.setter
-    def color(self, color):
-        self._color = color
-        hex = '#{0:02x}{1:02x}{2:02x}'.format(*self._color)
-        self.setToolTip('rgb: {}\nhex: {}'.format(self._color[0:3], hex))
-        self.update()
-
-
 class PropColorPicker(BaseProperty):
-
     def __init__(self, parent=None):
         super(PropColorPicker, self).__init__(parent)
         self._color = (0, 0, 0)
-        self._label = QtWidgets.QLabel()
         self._button = QtWidgets.QPushButton()
+        self._vector = PropVector3()
+        self._vector.set_value([0, 0, 0])
         self._update_color()
 
         self._button.clicked.connect(self._on_select_color)
+        self._vector.value_changed.connect(self._on_vector_changed)
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 8, 0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        layout.addWidget(self._label, 0, QtCore.Qt.AlignCenter)
-        layout.addWidget(self._button, 1, QtCore.Qt.AlignLeft)
+        layout.addWidget(self._button, 0, QtCore.Qt.AlignLeft)
+        layout.addWidget(self._vector, 1, QtCore.Qt.AlignLeft)
+
+    def _on_vector_changed(self, o, value):
+        self._color = tuple(value)
+        self._update_color()
+        self.value_changed.emit(self.toolTip(), value)
+
+    def _update_vector(self):
+        self._vector.set_value(list(self._color))
 
     def _on_select_color(self):
-        color = QtWidgets.QColorDialog.getColor(QtGui.QColor(*self.get_value()),
-                                                options=QtWidgets.QColorDialog.ShowAlphaChannel)
+        color = QtWidgets.QColorDialog.getColor(QtGui.QColor.fromRgbF(*self.get_value()))
         if color.isValid():
             self.set_value(color.getRgb())
 
     def _update_color(self):
-        hex = self.hex_color()
-        self._label.setText(hex)
-        self._label.setAlignment(QtCore.Qt.AlignCenter)
-        self._label.setMinimumWidth(60)
-
+        c = [int(max(min(i, 255), 0)) for i in self._color]
+        hex_color = '#{0:02x}{1:02x}{2:02x}'.format(*c)
         self._button.setStyleSheet(
             '''QPushButton {{background-color: rgba({0}, {1}, {2}, 255);}}
-               QPushButton::hover {{background-color: rgba({0}, {1}, {2}, 200);}}'''
-                .format(*self._color))
-        self._button.setToolTip('rgb: {}\nhex: {}'.format(self._color[0:3], hex))
-
-    def hex_color(self):
-        return '#{0:02x}{1:02x}{2:02x}'.format(*self._color)
+               QPushButton::hover {{background-color: rgba({0}, {1}, {2}, 200);}}'''.format(*c))
+        self._button.setToolTip('rgb: {}\nhex: {}'.format(self._color[:3], hex_color))
 
     def get_value(self):
-        return self._color
+        return self._color[:3]
 
     def set_value(self, value):
         if value != self.get_value():
             self._color = value
             self._update_color()
+            self._update_vector()
             self.value_changed.emit(self.toolTip(), value)
 
 
@@ -120,6 +96,7 @@ class PropSlider(BaseProperty):
                                    QtWidgets.QSizePolicy.Preferred)
         self._spnbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
         layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._spnbox)
         layout.addWidget(self._slider)
         self._spnbox.valueChanged.connect(self._on_spnbox_changed)
@@ -306,6 +283,7 @@ class PropFilePath(BaseProperty):
         _button.setIcon(icon)
 
         hbox = QtWidgets.QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
         hbox.addWidget(self._ledit)
         hbox.addWidget(_button)
         self.setLayout(hbox)
@@ -314,12 +292,16 @@ class PropFilePath(BaseProperty):
         self._ledit.setStyleSheet("QLineEdit{border:1px solid}")
         _button.setStyleSheet("QPushButton{border:1px solid}")
         self._ext = "*"
+        self._file_dir = None
 
     def set_ext(self, ext):
         self._ext = ext
 
+    def set_file_dir(self, dir):
+        self._file_dir = dir
+
     def _on_select_file(self):
-        file_path = file_dialog.getOpenFileName(self, ext_filter=self._ext)
+        file_path = file_dialog.getOpenFileName(self, file_dir=self._file_dir, ext_filter=self._ext)
         file = file_path[0] or None
         if file:
             self.set_value(file)
@@ -337,6 +319,17 @@ class PropFilePath(BaseProperty):
         if _value != self.get_value():
             self._ledit.setText(_value)
             self._on_value_change(_value)
+
+
+class PropFileSavePath(PropFilePath):
+    def __init__(self, parent=None):
+        super(PropFileSavePath, self).__init__(parent)
+
+    def _on_select_file(self):
+        file_path = file_dialog.getSaveFileName(self, file_dir=self._file_dir, ext_filter=self._ext)
+        file = file_path[0] or None
+        if file:
+            self.set_value(file)
 
 
 class _valueMenu(QtWidgets.QMenu):
@@ -512,6 +505,7 @@ class _valueSliderEdit(QtWidgets.QWidget):
         self._slider.valueChanged.connect(self._on_slider_changed)
 
         hbox = QtWidgets.QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
         hbox.addWidget(self._edit)
         hbox.addWidget(self._slider)
         self.setLayout(hbox)
@@ -592,6 +586,7 @@ class PropVector(BaseProperty):
     def __init__(self, parent=None, dim=3):
         super(PropVector, self).__init__(parent)
         hbox = QtWidgets.QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
         self._value = []
         self._items = []
 
@@ -619,7 +614,7 @@ class PropVector(BaseProperty):
 
     def _update_items(self):
         for index, value in enumerate(self._value):
-            if self._items[index].value() != value:
+            if index < len(self._items) and self._items[index].value() != value:
                 self._items[index].setValue(value)
 
     def get_value(self):
@@ -701,6 +696,7 @@ WIDGET_MAP = {
     NODE_PROP_COLORPICKER: PropColorPicker,
     NODE_PROP_SLIDER: PropSlider,
     NODE_PROP_FILE: PropFilePath,
+    NODE_PROP_FILE_SAVE: PropFileSavePath,
     NODE_PROP_VECTOR2: PropVector2,
     NODE_PROP_VECTOR3: PropVector3,
     NODE_PROP_VECTOR4: PropVector4,
